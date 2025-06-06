@@ -1,0 +1,151 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StartupHub - Платформа для підтримки стартап проектів</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Додаємо Leaflet для карт -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <h1>StartupHub</h1>
+                <span>LET'S BE THINKERS</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Головна</a></li>
+                    {% if session.user_id %}
+                    <li><a href="{{ url_for('create_idea') }}"><i class="fas fa-lightbulb"></i> Створити ідею</a></li>
+                    <li><a href="{{ url_for('find_nearby_users') }}"><i class="fas fa-users"></i> Знайти команду</a></li>
+                    <li>
+                        <a href="{{ url_for('messages') }}">
+                            <i class="fas fa-envelope"></i> Повідомлення
+                            <span id="unread-badge" class="badge" style="display: none;"></span>
+                        </a>
+                    </li>
+                    <li><a href="{{ url_for('profile', username=session.username) }}"><i class="fas fa-user"></i> Мій профіль</a></li>
+                    {% if session.role == 'admin' %}
+                    <li class="dropdown">
+                        <a href="#"><i class="fas fa-cog"></i> Адмін <i class="fas fa-caret-down"></i></a>
+                        <div class="dropdown-content">
+                            <a href="{{ url_for('admin_users') }}">Користувачі</a>
+                            <a href="{{ url_for('admin_ideas') }}">Ідеї</a>
+                        </div>
+                    </li>
+                    {% endif %}
+                    <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Вийти</a></li>
+                    {% else %}
+                    <li><a href="{{ url_for('login') }}"><i class="fas fa-sign-in-alt"></i> Увійти</a></li>
+                    <li><a href="{{ url_for('register') }}"><i class="fas fa-user-plus"></i> Зареєструватися</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+                {{ message }}
+                <span class="alert-close" onclick="this.parentElement.style.display='none'">&times;</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="ideas-container">
+                <h2>Стартап Ідеї</h2>
+
+                {% if ideas %}
+                {% for idea in ideas %}
+                <div class="idea-card">
+                    <div class="idea-header">
+                        <div class="user-info">
+                            <div class="user-avatar">{{ idea.username[0] | upper }}</div>
+                            <div class="user-details">
+                                <a href="{{ url_for('profile', username=idea.username) }}" class="username">{{ idea.full_name if idea.full_name else idea.username }}</a>
+                                <span class="time">{{ idea.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                                {% if idea.city and idea.country %}
+                                <span class="location"><i class="fas fa-map-marker-alt"></i> {{ idea.city }}, {{ idea.country }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="idea-actions">
+                            <a href="{{ url_for('view_idea', idea_id=idea.id) }}" class="btn btn-primary"><i class="fas fa-eye"></i> Переглянути</a>
+                        </div>
+                    </div>
+                    <div class="idea-content">
+                        <h3>{{ idea.title }}</h3>
+                        <p>{{ idea.description[:200] }}{% if idea.description|length > 200 %}...{% endif %}</p>
+                    </div>
+                    <div class="idea-footer">
+                        <div class="idea-stats">
+                            <span><i class="fas fa-comment"></i> {{ idea.comment_count }} коментарів</span>
+                            <span><i class="fas fa-photo-video"></i> {{ idea.media_count }} медіа</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="no-content">
+                    <p>Поки що немає доступних ідей. Будьте першим, хто створить ідею!</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('create_idea') }}" class="btn btn-primary">Створити ідею</a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 StartupHub. Всі права захищені.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Перевірка непрочитаних повідомлень
+        function checkUnreadMessages() {
+            {% if session.user_id %}
+                fetch('{{ url_for("unread_message_count") }}')
+                    .then(response => response.json())
+                    .then(data => {
+                        var unreadBadge = document.getElementById('unread-badge');
+                        if (data.unread_count > 0) {
+                            unreadBadge.textContent = data.unread_count;
+                            unreadBadge.style.display = 'inline-block';
+                        } else {
+                            unreadBadge.style.display = 'none';
+                        }
+                    });
+            {% endif %}
+        }
+
+        // Перевіряємо кожні 30 секунд
+        document.addEventListener('DOMContentLoaded', function() {
+            checkUnreadMessages();
+            setInterval(checkUnreadMessages, 30000);
+        });
+
+        // Переконуємося, що сповіщення зникають через певний час
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                setTimeout(function() {
+                    alert.style.display = 'none';
+                }, 5000);
+            });
+        });
+    </script>
+</body>
+</html>
